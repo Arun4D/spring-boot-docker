@@ -81,10 +81,11 @@
 				<artifactId>docker-maven-plugin</artifactId>
 				<configuration>
 					<imageName>${project.artifactId}:v1</imageName>
-					<dockerDirectory>src/main/docker</dockerDirectory>
+					<!--<dockerDirectory>src/main/docker</dockerDirectory>-->
+					<dockerDirectory>${project.build.directory}/classes</dockerDirectory>
 					<resources>
 						<resource>
-							<targetPath>/</targetPath>
+							<targetPath>/target/</targetPath>
 							<directory>${project.build.directory}</directory>
 							<include>${project.build.finalName}.jar</include>
 						</resource>
