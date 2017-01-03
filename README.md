@@ -10,7 +10,7 @@ Install docker toolbox
 Maven command to build the docker image.
 
 ``` 
-git clone https://github.com/Arun4D/spring-boot-study.git
+git clone https://github.com/Arun4D/spring-boot-docker.git
 mvn clean package docker:build
 docker run --name spring-boot-docker-v1  -e "SPRING_PROFILES_ACTIVE=default" -e "SERVER.PORT=10000" -p 10000:10000 -t spring-boot-docker:v1
 ```
@@ -48,4 +48,3 @@ Open the browser and hit the following url to invoke the service.
 ````
 http://192.168.99.100:10000/person?firstName=arun&lastName=duraisamy
 ````
-
