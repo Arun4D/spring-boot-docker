@@ -81,8 +81,7 @@
 				<artifactId>docker-maven-plugin</artifactId>
 				<configuration>
 					<imageName>${project.artifactId}:latest</imageName>
-					<!--<dockerDirectory>src/main/docker</dockerDirectory>-->
-					<dockerDirectory>${project.build.directory}/classes</dockerDirectory>
+					<dockerDirectory>src/main/docker</dockerDirectory>
 					<resources>
 						<resource>
 							<targetPath>/target/</targetPath>
