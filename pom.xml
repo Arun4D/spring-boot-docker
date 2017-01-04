@@ -5,7 +5,7 @@
 
 	<groupId>com.springboot.study</groupId>
 	<artifactId>spring-boot-docker</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.1</version>
 	<packaging>jar</packaging>
 
 	<name>spring-boot-docker</name>
@@ -80,7 +80,7 @@
 				<groupId>com.spotify</groupId>
 				<artifactId>docker-maven-plugin</artifactId>
 				<configuration>
-					<imageName>${project.artifactId}:v1</imageName>
+					<imageName>${project.artifactId}:latest</imageName>
 					<!--<dockerDirectory>src/main/docker</dockerDirectory>-->
 					<dockerDirectory>${project.build.directory}/classes</dockerDirectory>
 					<resources>
