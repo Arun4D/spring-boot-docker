@@ -1,5 +1,9 @@
 # Spring-Boot-Docker
-
+This spring boot application contains following
+1. H2 database to store values
+2. flyway data migration
+3. com.spotify/docker-maven-plugin used to build docker images locally.
+ 
 ### Environment Setup
 Install docker toolbox
 
