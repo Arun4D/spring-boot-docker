@@ -15,10 +15,13 @@ Maven command to build the docker image.
 
 ``` 
 git clone https://github.com/Arun4D/spring-boot-docker.git
-mvn clean package docker:build
+mvn clean install
+docker build -t spring-boot-docker:latest -f Dockerfile .
 docker run --name spring-boot-docker-v1  -e "SPRING_PROFILES_ACTIVE=default" -e "SERVER.PORT=10000" -p 10000:10000 -t spring-boot-docker:v1
 ```
 
+ > Note: Run `docker-machine env default` in the cmd / bash to identify the docker.
+ 
 ### H2 database Configuration
 
 * The default h2 console url to run this spring boot application in local environment
