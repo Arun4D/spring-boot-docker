@@ -20,7 +20,7 @@ RUN yum install -y wget && \
     rm -f "jre-${JAVA_VERSION}-linux-x64.rpm"
 
 VOLUME /tmp
-COPY target/spring-boot-docker-0.0.1.jar spring-boot-app.jar
+ONBUILD COPY target/spring-boot-docker-0.0.1.jar spring-boot-app.jar
 RUN sh -c 'touch /spring-boot-app.jar'
 ENV JAVA_OPTS=""
 ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar -Dspring.profiles.active=default /spring-boot-app.jar" ]
