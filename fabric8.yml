@@ -1,0 +1,9 @@
+---
+buildName: "spring-boot-docker"
+links:
+  Current: "http://10.0.0.82:80/kubernetes/pods?namespace=default"
+  Git: "https://github.com/Arun4D/spring-boot-docker.git"
+  Job: "http://192.168.99.101:30757/job/spring-boot-docker"
+environments:
+  Current: "default"
+useLocalFlow: true
