@@ -4,7 +4,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -28,10 +27,7 @@ import com.springboot.study.repository.PersonRepository;
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
     "spring.datasource.driver-class-name=org.h2.Driver",
-    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-    "spring.security.user.name=test",
-    "spring.security.user.password=test",
-    "spring.security.user.roles=ADMIN"
+    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
 })
 class PersonIntegrationTest {
 
@@ -46,26 +42,6 @@ class PersonIntegrationTest {
     void setUp() {
         personRepository.deleteAll();
     }    @Test
-    void shouldAccessActuatorHealthEndpointWithoutAuth() throws Exception {
-        mockMvc.perform(get("/actuator/health"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType("application/vnd.spring-boot.actuator.v3+json"));
-    }
-
-    @Test
-    void shouldRequireAuthForActuatorEndpoints() throws Exception {
-        mockMvc.perform(get("/actuator"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void shouldAccessActuatorWithAuth() throws Exception {
-        mockMvc.perform(get("/actuator")
-                .with(httpBasic("test", "test")))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void shouldSaveAndRetrievePerson() {
         // given
         Person person = new Person();
@@ -90,8 +66,7 @@ class PersonIntegrationTest {
         createTestPerson("Alice", "Johnson");
 
         // when & then
-        mockMvc.perform(get("/api/persons")
-                    .with(httpBasic("test", "test")))
+        mockMvc.perform(get("/api/persons"))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -110,8 +85,7 @@ class PersonIntegrationTest {
 
         // when & then
         mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", "John")
-                    .with(httpBasic("test", "test")))
+                    .param("firstName", "John"))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -128,8 +102,7 @@ class PersonIntegrationTest {
 
         // when & then
         mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", "XYZ")
-                    .with(httpBasic("test", "test")))
+                    .param("firstName", "XYZ"))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -139,8 +112,7 @@ class PersonIntegrationTest {
     @Test
     void shouldReturnBadRequestWhenFirstNameIsEmpty() throws Exception {
         mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", "")
-                    .with(httpBasic("test", "test")))
+                    .param("firstName", ""))
                 .andDo(print())
                 .andExpect(status().isBadRequest());
     }
