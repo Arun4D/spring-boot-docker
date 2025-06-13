@@ -38,10 +38,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-
+      packages: write    
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up JDK
       uses: actions/setup-java@v3
@@ -54,7 +53,9 @@ jobs:
       run: mvn -B package --file pom.xml
 
     - name: Run Tests
-      run: mvn test    - name: Upload Test Results
+      run: mvn test    
+    
+    - name: Upload Test Results
       if: always()
       uses: actions/upload-artifact@v4
       with:
@@ -66,16 +67,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-
+      packages: write    
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -104,13 +104,12 @@ jobs:
 
   security-scan:
     needs: build-and-test
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-latest    
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.17.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
@@ -133,20 +132,44 @@ jobs:
       SPRING_DATASOURCE_USERNAME: ${{ secrets.STAGING_DB_USERNAME }}
       SPRING_DATASOURCE_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
 
-    steps:
+    steps:    
     - name: Deploy to Staging
       run: |
         echo "Deploying version ${{ github.sha }} to staging"
-        # Add your staging deployment commands here
+        
+        # Cleanup existing container
+        docker rm -f spring-boot-app-staging || true
+        
+        # Pull and run new container
         docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker run -d \
-          --name spring-boot-app \
+          --name spring-boot-app-staging \
+          --health-cmd="curl -f http://localhost:${{ env.SERVER_PORT }}/actuator/health || exit 1" \
+          --health-interval=30s \
+          --health-timeout=10s \
+          --health-retries=3 \
           -p ${{ env.SERVER_PORT }}:${{ env.SERVER_PORT }} \
           -e SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }} \
           -e SPRING_DATASOURCE_URL=${{ env.SPRING_DATASOURCE_URL }} \
           -e SPRING_DATASOURCE_USERNAME=${{ env.SPRING_DATASOURCE_USERNAME }} \
           -e SPRING_DATASOURCE_PASSWORD=${{ env.SPRING_DATASOURCE_PASSWORD }} \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        # Wait for container to be healthy
+        timeout=90
+        while [ $timeout -gt 0 ]; do
+          health=$(docker inspect --format='{{.State.Health.Status}}' spring-boot-app-staging)
+          if [ "$health" == "healthy" ]; then
+            echo "Container is healthy!"
+            exit 0
+          fi
+          echo "Waiting for container to be healthy... ($timeout seconds left)"
+          sleep 5
+          timeout=$((timeout - 5))
+        done
+        echo "Container health check failed!"
+        docker logs spring-boot-app-staging
+        exit 1
 
   deploy-production:
     needs: [deploy-staging]
@@ -163,17 +186,41 @@ jobs:
       SPRING_DATASOURCE_USERNAME: ${{ secrets.PROD_DB_USERNAME }}
       SPRING_DATASOURCE_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
 
-    steps:
+    steps:    
     - name: Deploy to Production
       run: |
         echo "Deploying version ${{ github.sha }} to production"
-        # Add your production deployment commands here
+        
+        # Cleanup existing container
+        docker rm -f spring-boot-app-prod || true
+        
+        # Pull and run new container
         docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker run -d \
-          --name spring-boot-app \
+          --name spring-boot-app-prod \
+          --health-cmd="curl -f http://localhost:${{ env.SERVER_PORT }}/actuator/health || exit 1" \
+          --health-interval=30s \
+          --health-timeout=10s \
+          --health-retries=3 \
           -p ${{ env.SERVER_PORT }}:${{ env.SERVER_PORT }} \
           -e SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }} \
           -e SPRING_DATASOURCE_URL=${{ env.SPRING_DATASOURCE_URL }} \
           -e SPRING_DATASOURCE_USERNAME=${{ env.SPRING_DATASOURCE_USERNAME }} \
           -e SPRING_DATASOURCE_PASSWORD=${{ env.SPRING_DATASOURCE_PASSWORD }} \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        # Wait for container to be healthy
+        timeout=90
+        while [ $timeout -gt 0 ]; do
+          health=$(docker inspect --format='{{.State.Health.Status}}' spring-boot-app-prod)
+          if [ "$health" == "healthy" ]; then
+            echo "Container is healthy!"
+            exit 0
+          fi
+          echo "Waiting for container to be healthy... ($timeout seconds left)"
+          sleep 5
+          timeout=$((timeout - 5))
+        done
+        echo "Container health check failed!"
+        docker logs spring-boot-app-prod
+        exit 1
