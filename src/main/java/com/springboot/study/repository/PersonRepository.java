@@ -1,13 +1,19 @@
 package com.springboot.study.repository;
 
 import com.springboot.study.domain.Person;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
- * Created by aduraisamy on 1/2/2017.
+ * Repository for Person entity with additional search methods
  */
 @Repository
-public interface PersonRepository extends CrudRepository<Person, Long> {
-
+public interface PersonRepository extends JpaRepository<Person, Long> {
+    
+    /**
+     * Find persons by first name (case-insensitive, partial match)
+     */
+    List<Person> findByFirstNameContainingIgnoreCase(String firstName);
 }

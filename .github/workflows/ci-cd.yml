@@ -1,0 +1,181 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  # Docker settings
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  
+  # Java settings
+  JAVA_VERSION: '17'
+  
+  # Spring Boot settings
+  SPRING_PROFILES_ACTIVE: prod
+  SERVER_PORT: 8080
+  
+  # Database settings - default for H2
+  SPRING_DATASOURCE_URL: jdbc:h2:mem:PersonDB;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+  SPRING_DATASOURCE_USERNAME: sa
+  SPRING_DATASOURCE_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  
+  # Logging settings
+  LOGGING_LEVEL_ROOT: INFO
+  LOGGING_LEVEL_COM_SPRINGBOOT: DEBUG
+  
+  # Application specific
+  APP_VERSION: ${{ github.sha }}
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Build with Maven
+      run: mvn -B package --file pom.xml
+
+    - name: Run Tests
+      run: mvn test
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: target/surefire-reports/
+
+  docker-build-and-push:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix=,suffix=,format=short
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and Push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  security-scan:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+  deploy-staging:
+    needs: [docker-build-and-push, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+
+    env:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: ${{ secrets.STAGING_DB_URL }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.STAGING_DB_USERNAME }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+
+    steps:
+    - name: Deploy to Staging
+      run: |
+        echo "Deploying version ${{ github.sha }} to staging"
+        # Add your staging deployment commands here
+        docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker run -d \
+          --name spring-boot-app \
+          -p ${{ env.SERVER_PORT }}:${{ env.SERVER_PORT }} \
+          -e SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }} \
+          -e SPRING_DATASOURCE_URL=${{ env.SPRING_DATASOURCE_URL }} \
+          -e SPRING_DATASOURCE_USERNAME=${{ env.SPRING_DATASOURCE_USERNAME }} \
+          -e SPRING_DATASOURCE_PASSWORD=${{ env.SPRING_DATASOURCE_PASSWORD }} \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy-production:
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+
+    env:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${{ secrets.PROD_DB_URL }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.PROD_DB_USERNAME }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+
+    steps:
+    - name: Deploy to Production
+      run: |
+        echo "Deploying version ${{ github.sha }} to production"
+        # Add your production deployment commands here
+        docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker run -d \
+          --name spring-boot-app \
+          -p ${{ env.SERVER_PORT }}:${{ env.SERVER_PORT }} \
+          -e SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }} \
+          -e SPRING_DATASOURCE_URL=${{ env.SPRING_DATASOURCE_URL }} \
+          -e SPRING_DATASOURCE_USERNAME=${{ env.SPRING_DATASOURCE_USERNAME }} \
+          -e SPRING_DATASOURCE_PASSWORD=${{ env.SPRING_DATASOURCE_PASSWORD }} \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

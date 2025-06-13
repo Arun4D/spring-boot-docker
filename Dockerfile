@@ -1,26 +1,40 @@
-FROM centos
+# Build stage
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /workspace/app
+COPY pom.xml .
+COPY src src
+RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests
 
-MAINTAINER Arun, arun4.duraisamy@gmail.com
+# Run stage
+FROM eclipse-temurin:17-jre-jammy
+LABEL maintainer="Arun <arun4.duraisamy@gmail.com>"
 
-# Default to UTF-8 file.encoding
-ENV LC_ALL en_US.UTF-8
+# Create a non-root user
+RUN useradd -r -u 1001 -g root springuser
 
-ENV JAVA_HOME /usr/bin/java
-ENV JAVA_VERSION 8u60
-ENV RPM_VERSION 8u60-b27
+WORKDIR /app
 
-# - install java8 jdk
-RUN yum install -y wget && \
-    wget \
-      --no-cookies \
-      --no-check-certificate \
-      --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" \
-      "http://download.oracle.com/otn-pub/java/jdk/${RPM_VERSION}/jre-${JAVA_VERSION}-linux-x64.rpm" && \
-    yum localinstall -y "jre-${JAVA_VERSION}-linux-x64.rpm" && \
-    rm -f "jre-${JAVA_VERSION}-linux-x64.rpm"
+# Copy the JAR file from the builder stage
+COPY --from=builder /workspace/app/target/*.jar app.jar
 
-VOLUME /tmp
-ADD spring-boot-docker-0.0.1.jar spring-boot-app.jar
-RUN sh -c 'touch /spring-boot-app.jar'
-ENV JAVA_OPTS=""
-ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar -Dspring.profiles.active=default /spring-boot-app.jar" ]
+# Set permissions
+RUN chown springuser:root /app \
+    && chmod 755 /app \
+    && chown springuser:root app.jar \
+    && chmod 544 app.jar
+
+# Configure JVM options for containers
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# Use non-root user
+USER 1001
+
+# Set healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# Spring specific options
+ENV SPRING_PROFILES_ACTIVE="default"
+
+EXPOSE 8080
+ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar app.jar" ]

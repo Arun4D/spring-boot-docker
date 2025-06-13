@@ -4,30 +4,61 @@ import com.springboot.study.assembler.PersonAssembler;
 import com.springboot.study.domain.Person;
 import com.springboot.study.dto.PersonDTO;
 import com.springboot.study.repository.PersonRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
- * Created by aduraisamy on 12/29/2016.
+ * REST Controller for Person operations
  */
 @RestController
+@RequestMapping("/api/persons")
 public class PersonController {
 
-    @Autowired
-    private PersonRepository personRepository;
+    private final PersonRepository personRepository;
+    private final PersonAssembler personAssembler;
 
-    @Autowired
-    private PersonAssembler personAssembler;
+    public PersonController(PersonRepository personRepository, PersonAssembler personAssembler) {
+        this.personRepository = personRepository;
+        this.personAssembler = personAssembler;
+    }
 
-    @RequestMapping("/person")
-    public PersonDTO post(@RequestParam(value = "firstName", defaultValue = "defaultFirstName") String firstName, @RequestParam(value = "lastName", defaultValue = "defaultLastName") String lastName) {
-
+    @PostMapping
+    public ResponseEntity<PersonDTO> createPerson(
+            @RequestParam(defaultValue = "defaultFirstName") String firstName,
+            @RequestParam(defaultValue = "defaultLastName") String lastName) {
+        
         Person person = personAssembler.toPerson(firstName, lastName);
-        personRepository.save(person);
-        PersonDTO personDTO = personAssembler.toPersonDTO(person);
+        Person savedPerson = personRepository.save(person);
+        PersonDTO personDTO = personAssembler.toPersonDTO(savedPerson);
+        
+        return ResponseEntity.ok(personDTO);
+    }    
+    
+    @GetMapping
+    public ResponseEntity<List<PersonDTO>> getAllPersons() {
+        return ResponseEntity.ok(
+            personRepository.findAll()
+                .stream()
+                .map(personAssembler::toPersonDTO)
+                .toList()
+        );
+    }
 
-        return personDTO;
+    @GetMapping("/search")
+    public ResponseEntity<List<PersonDTO>> getByFirstName(
+            @RequestParam(required = true) String firstName) {
+        
+        if (firstName == null || firstName.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        return ResponseEntity.ok(
+            personRepository.findByFirstNameContainingIgnoreCase(firstName)
+                .stream()
+                .map(personAssembler::toPersonDTO)
+                .toList()
+        );
     }
 }
