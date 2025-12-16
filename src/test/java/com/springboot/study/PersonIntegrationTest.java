@@ -1,47 +1,45 @@
 package com.springboot.study;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 import com.springboot.study.domain.Person;
 import com.springboot.study.repository.PersonRepository;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-    "spring.datasource.driver-class-name=org.h2.Driver",
-    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
+        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect"
 })
 class PersonIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
+
+    @org.springframework.boot.test.web.server.LocalServerPort
+    private int port;
 
     @Autowired
     private PersonRepository personRepository;
 
-
     @BeforeEach
     void setUp() {
+        webTestClient = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .build();
         personRepository.deleteAll();
-    }    @Test
+    }
+
+    @Test
     void shouldSaveAndRetrievePerson() {
         // given
         Person person = new Person();
@@ -66,14 +64,16 @@ class PersonIntegrationTest {
         createTestPerson("Alice", "Johnson");
 
         // when & then
-        mockMvc.perform(get("/api/persons"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(3)))
-                .andExpect(jsonPath("$[0].firstName", is("John")))
-                .andExpect(jsonPath("$[1].firstName", is("Jane")))
-                .andExpect(jsonPath("$[2].firstName", is("Alice")));
+        webTestClient.get().uri("/api/persons")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(3)
+                .jsonPath("$[0].firstName").isEqualTo("John")
+                .jsonPath("$[1].firstName").isEqualTo("Jane")
+                .jsonPath("$[2].firstName").isEqualTo("Alice");
     }
 
     @Test
@@ -84,14 +84,17 @@ class PersonIntegrationTest {
         createTestPerson("Alice", "Johnson");
 
         // when & then
-        mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", "John"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].firstName", is("John")))
-                .andExpect(jsonPath("$[1].firstName", is("Johnny")));
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/api/persons/search")
+                .queryParam("firstName", "John")
+                .build())
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(2)
+                .jsonPath("$[0].firstName").isEqualTo("John")
+                .jsonPath("$[1].firstName").isEqualTo("Johnny");
     }
 
     @Test
@@ -101,20 +104,25 @@ class PersonIntegrationTest {
         createTestPerson("Jane", "Smith");
 
         // when & then
-        mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", "XYZ"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(0)));
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/api/persons/search")
+                .queryParam("firstName", "XYZ")
+                .build())
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(0);
     }
 
     @Test
     void shouldReturnBadRequestWhenFirstNameIsEmpty() throws Exception {
-        mockMvc.perform(get("/api/persons/search")
-                    .param("firstName", ""))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/api/persons/search")
+                .queryParam("firstName", "")
+                .build())
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     private Person createTestPerson(String firstName, String lastName) {
