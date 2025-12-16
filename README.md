@@ -1,6 +1,6 @@
 # Spring-Boot-Docker
 
-This Spring Boot 3.0 application demonstrates:
+This Spring Boot 4.0 application demonstrates:
 1. H2 database integration
 2. Flyway data migration
 3. Docker containerization with multi-stage builds
@@ -60,7 +60,7 @@ docker logs spring-boot-app
 
 - Multi-stage build for smaller final image
 - Maven cache optimization
-- Eclipse Temurin JDK 17 (recommended for Spring Boot 3.0)
+- Eclipse Temurin JDK 17 (recommended for Spring Boot 4.0)
 - Security hardening with non-root user
 - Built-in health checks
 - Container-optimized JVM settings
